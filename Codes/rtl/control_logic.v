@@ -1,127 +1,461 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 20.03.2026 21:27:14
-// Design Name: 
-// Module Name: control_logic
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module control_logic #(
     parameter ADDR_WIDTH = 8
 )(
-    input  wire clk_i,
-    input  wire rst_i,
-    input  wire start_i,
-    input  wire addr_done_i,
+    input wire clk_i,
+    input wire rst_i,
+    input wire start_i,
+    input wire addr_done_i,
 
     output reg addr_en_o,
     output reg addr_rst_o,
+
+    // 1 = UP
+    // 0 = DOWN
+    output reg addr_dir_o,
+
     output reg we_o,
     output reg compare_en_o,
-    output reg done_o
+
+    output reg done_o,
+
+    output reg [1:0] pattern_sel_o
 );
 
-    // State encoding (Verilog style)
-    parameter IDLE         = 3'b000;
-    parameter INIT         = 3'b001;
-    parameter WRITE        = 3'b010;
-    parameter READ_SETUP   = 3'b011;
-    parameter READ_WAIT    = 3'b100;
-    parameter READ_COMPARE = 3'b101;
-    parameter DONE         = 3'b110;
+    // =========================================================
+    // STATE ENCODING
+    // =========================================================
 
-    reg [2:0] state, next_state;
+    localparam IDLE        = 5'd0;
 
-    // State register
+    // M0: ↑ W0
+    localparam M0_SETUP    = 5'd1;
+    localparam M0_WRITE    = 5'd2;
+
+    // M1: ↑ R0 W1
+    localparam M1_SETUP    = 5'd3;
+    localparam M1_READ     = 5'd4;
+    localparam M1_WRITE    = 5'd5;
+
+    // M2: ↑ R1 W0
+    localparam M2_SETUP    = 5'd6;
+    localparam M2_READ     = 5'd7;
+    localparam M2_WRITE    = 5'd8;
+
+    // M3: ↓ R0 W1
+    localparam M3_SETUP    = 5'd9;
+    localparam M3_READ     = 5'd10;
+    localparam M3_WRITE    = 5'd11;
+
+    // M4: ↓ R1 W0
+    localparam M4_SETUP    = 5'd12;
+    localparam M4_READ     = 5'd13;
+    localparam M4_WRITE    = 5'd14;
+
+    // M5: ↑ R0
+    localparam M5_SETUP    = 5'd15;
+    localparam M5_READ     = 5'd16;
+
+    localparam DONE        = 5'd17;
+
+    reg [4:0] state;
+    reg [4:0] next_state;
+
+
+    // =========================================================
+    // STATE REGISTER
+    // =========================================================
+
     always @(posedge clk_i) begin
+
         if (rst_i)
             state <= IDLE;
         else
             state <= next_state;
+
     end
 
-    // Next state logic
+
+    // =========================================================
+    // NEXT STATE LOGIC
+    // =========================================================
+
     always @(*) begin
+
+        next_state = state;
+
         case (state)
 
-            IDLE:
-                next_state = (start_i) ? INIT : IDLE;
+            // -------------------------------------------------
+            // IDLE
+            // -------------------------------------------------
 
-            INIT:
-                next_state = WRITE;
+            IDLE: begin
 
-            WRITE:
-                next_state = (addr_done_i) ? READ_SETUP : WRITE;
+                if (start_i)
+                    next_state = M0_SETUP;
 
-            READ_SETUP:
-                next_state = READ_WAIT;
+            end
 
-            READ_WAIT:
-                next_state = READ_COMPARE;
 
-            READ_COMPARE:
-                next_state = (addr_done_i) ? DONE : READ_WAIT;
+            // -------------------------------------------------
+            // M0: ↑ W0
+            // -------------------------------------------------
+
+            M0_SETUP:
+                next_state = M0_WRITE;
+
+            M0_WRITE: begin
+
+                if (addr_done_i)
+                    next_state = M1_SETUP;
+                else
+                    next_state = M0_WRITE;
+
+            end
+
+
+            // -------------------------------------------------
+            // M1: ↑ R0 W1
+            // -------------------------------------------------
+
+            M1_SETUP:
+                next_state = M1_READ;
+
+            M1_READ:
+                next_state = M1_WRITE;
+
+            M1_WRITE: begin
+
+                if (addr_done_i)
+                    next_state = M2_SETUP;
+                else
+                    next_state = M1_READ;
+
+            end
+
+
+            // -------------------------------------------------
+            // M2: ↑ R1 W0
+            // -------------------------------------------------
+
+            M2_SETUP:
+                next_state = M2_READ;
+
+            M2_READ:
+                next_state = M2_WRITE;
+
+            M2_WRITE: begin
+
+                if (addr_done_i)
+                    next_state = M3_SETUP;
+                else
+                    next_state = M2_READ;
+
+            end
+
+
+            // -------------------------------------------------
+            // M3: ↓ R0 W1
+            // -------------------------------------------------
+
+            M3_SETUP:
+                next_state = M3_READ;
+
+            M3_READ:
+                next_state = M3_WRITE;
+
+            M3_WRITE: begin
+
+                if (addr_done_i)
+                    next_state = M4_SETUP;
+                else
+                    next_state = M3_READ;
+
+            end
+
+
+            // -------------------------------------------------
+            // M4: ↓ R1 W0
+            // -------------------------------------------------
+
+            M4_SETUP:
+                next_state = M4_READ;
+
+            M4_READ:
+                next_state = M4_WRITE;
+
+            M4_WRITE: begin
+
+                if (addr_done_i)
+                    next_state = M5_SETUP;
+                else
+                    next_state = M4_READ;
+
+            end
+
+
+            // -------------------------------------------------
+            // M5: ↑ R0
+            // -------------------------------------------------
+
+            M5_SETUP:
+                next_state = M5_READ;
+
+            M5_READ: begin
+
+                if (addr_done_i)
+                    next_state = DONE;
+                else
+                    next_state = M5_READ;
+
+            end
+
+
+            // -------------------------------------------------
+            // DONE
+            // -------------------------------------------------
 
             DONE:
                 next_state = DONE;
+
 
             default:
                 next_state = IDLE;
 
         endcase
+
     end
 
-    // Output logic
+
+    // =========================================================
+    // OUTPUT LOGIC
+    // =========================================================
+
     always @(*) begin
-        // default values
-        addr_en_o    = 0;
-        addr_rst_o   = 0;
-        we_o         = 0;
-        compare_en_o = 0;
-        done_o       = 0;
+
+        // Defaults
+        addr_en_o     = 1'b0;
+        addr_rst_o    = 1'b0;
+        addr_dir_o    = 1'b1;
+
+        we_o          = 1'b0;
+        compare_en_o  = 1'b0;
+
+        done_o        = 1'b0;
+
+        pattern_sel_o = 2'b00;
+
 
         case (state)
 
-            INIT: begin
-                addr_rst_o = 1;
+            // -------------------------------------------------
+            // M0: ↑ W0
+            // -------------------------------------------------
+
+            M0_SETUP: begin
+
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b1;
+
+                pattern_sel_o = 2'b00;
+
             end
 
-            WRITE: begin
-                addr_en_o = 1;
-                we_o      = 1;
+            M0_WRITE: begin
+
+                addr_dir_o    = 1'b1;
+
+                we_o          = 1'b1;
+                pattern_sel_o = 2'b00;
+
+                // Do not advance on last address
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
             end
 
-            READ_SETUP: begin
-                addr_rst_o = 1;
+
+            // -------------------------------------------------
+            // M1: ↑ R0 W1
+            // -------------------------------------------------
+
+            M1_SETUP: begin
+
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b1;
+
+                pattern_sel_o = 2'b00;
+
             end
 
-            READ_WAIT: begin
-                addr_en_o = 1;
+            M1_READ: begin
+
+                addr_dir_o    = 1'b1;
+
+                compare_en_o  = 1'b1;
+                pattern_sel_o = 2'b00;
+
             end
 
-            READ_COMPARE: begin
-                compare_en_o = 1;
+            M1_WRITE: begin
+
+                addr_dir_o    = 1'b1;
+
+                we_o          = 1'b1;
+                pattern_sel_o = 2'b01;
+
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
             end
+
+
+            // -------------------------------------------------
+            // M2: ↑ R1 W0
+            // -------------------------------------------------
+
+            M2_SETUP: begin
+
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b1;
+
+                pattern_sel_o = 2'b01;
+
+            end
+
+            M2_READ: begin
+
+                addr_dir_o    = 1'b1;
+
+                compare_en_o  = 1'b1;
+                pattern_sel_o = 2'b01;
+
+            end
+
+            M2_WRITE: begin
+
+                addr_dir_o    = 1'b1;
+
+                we_o          = 1'b1;
+                pattern_sel_o = 2'b00;
+
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
+            end
+
+
+            // -------------------------------------------------
+            // M3: ↓ R0 W1
+            // -------------------------------------------------
+
+            M3_SETUP: begin
+
+                // Load MAX address
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b0;
+
+                pattern_sel_o = 2'b00;
+
+            end
+
+            M3_READ: begin
+
+                addr_dir_o    = 1'b0;
+
+                compare_en_o  = 1'b1;
+                pattern_sel_o = 2'b00;
+
+            end
+
+            M3_WRITE: begin
+
+                addr_dir_o    = 1'b0;
+
+                we_o          = 1'b1;
+                pattern_sel_o = 2'b01;
+
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
+            end
+
+
+            // -------------------------------------------------
+            // M4: ↓ R1 W0
+            // -------------------------------------------------
+
+            M4_SETUP: begin
+
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b0;
+
+                pattern_sel_o = 2'b01;
+
+            end
+
+            M4_READ: begin
+
+                addr_dir_o    = 1'b0;
+
+                compare_en_o  = 1'b1;
+                pattern_sel_o = 2'b01;
+
+            end
+
+            M4_WRITE: begin
+
+                addr_dir_o    = 1'b0;
+
+                we_o          = 1'b1;
+                pattern_sel_o = 2'b00;
+
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
+            end
+
+
+            // -------------------------------------------------
+            // M5: ↑ R0
+            // -------------------------------------------------
+
+            M5_SETUP: begin
+
+                addr_rst_o    = 1'b1;
+                addr_dir_o    = 1'b1;
+
+                pattern_sel_o = 2'b00;
+
+            end
+
+            M5_READ: begin
+
+                addr_dir_o    = 1'b1;
+
+                compare_en_o  = 1'b1;
+                pattern_sel_o = 2'b00;
+
+                if (!addr_done_i)
+                    addr_en_o = 1'b1;
+
+            end
+
+
+            // -------------------------------------------------
+            // DONE
+            // -------------------------------------------------
 
             DONE: begin
-                done_o = 1;
+
+                done_o = 1'b1;
+
             end
 
         endcase
+
     end
 
 endmodule
