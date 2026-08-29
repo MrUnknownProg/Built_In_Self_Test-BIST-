@@ -3,13 +3,20 @@
 module address_remapper #(
     parameter ADDR_WIDTH = 10
 )(
-    input wire [(ADDR_WIDTH-1):0] logical_addr_i,
+    input  wire [ADDR_WIDTH-1:0] logical_addr_i,
 
-    input wire                  repair_valid_i,
-    input wire [ADDR_WIDTH-1:0] repair_addr_i,
+    input  wire [ADDR_WIDTH-1:0] repair_addr_i,
+    input  wire                  repair_valid_i,
 
     output wire [ADDR_WIDTH-1:0] physical_addr_o
 );
+
+    // ---------------------------------------------------------
+    // If the current logical address has a repair entry,
+    // use the spare physical address.
+    //
+    // Otherwise access the original physical address.
+    // ---------------------------------------------------------
 
     assign physical_addr_o =
         repair_valid_i ?
