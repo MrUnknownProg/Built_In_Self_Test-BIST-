@@ -6,8 +6,8 @@ module tb_top_mbist;
     // INPUTS
     // =========================================================
 
-    reg clk_i_0;
-    reg rst_i_0;
+    reg clk_i;
+    reg rst_i;
     reg start_i_0;
     reg fault_en_i_0;
     reg repair_reset_i_0;
@@ -50,10 +50,10 @@ module tb_top_mbist;
     // DUT
     // =========================================================
 
-    top_mbist uut
+    Bit32_version_wrapper uut
     (
-        .clk_i_0
-            (clk_i_0),
+        .clk_i
+            (clk_i),
 
         .done_o_0
             (done_o_0),
@@ -91,8 +91,8 @@ module tb_top_mbist;
         .repaired_valid_o_0
             (repaired_valid_o_0),
 
-        .rst_i_0
-            (rst_i_0),
+        .rst_i
+            (rst_i),
 
         .start_i_0
             (start_i_0)
@@ -105,9 +105,9 @@ module tb_top_mbist;
 
     initial begin
 
-        clk_i_0 = 1'b0;
+        clk_i = 1'b0;
 
-        forever #5 clk_i_0 = ~clk_i_0;
+        forever #5 clk_i = ~clk_i;
 
     end
 
@@ -143,17 +143,17 @@ module tb_top_mbist;
 
         begin
 
-            rst_i_0          = 1'b1;
+            rst_i          = 1'b1;
             repair_reset_i_0 = 1'b1;
             start_i_0        = 1'b0;
 
             repeat(3)
-                @(posedge clk_i_0);
+                @(posedge clk_i);
 
-            rst_i_0          = 1'b0;
+            rst_i          = 1'b0;
             repair_reset_i_0 = 1'b0;
 
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
         end
 
@@ -171,14 +171,14 @@ module tb_top_mbist;
 
         begin
 
-            rst_i_0 = 1'b1;
+            rst_i = 1'b1;
 
             repeat(2)
-                @(posedge clk_i_0);
+                @(posedge clk_i);
 
-            rst_i_0 = 1'b0;
+            rst_i = 1'b0;
 
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
         end
 
@@ -193,7 +193,7 @@ module tb_top_mbist;
 
         begin
 
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
             start_i_0 = 1'b1;
 
@@ -203,7 +203,7 @@ module tb_top_mbist;
             $display("FAULT_EN      = %b", fault_en_i_0);
             $display("REPAIR_RESET  = %b", repair_reset_i_0);
 
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
             start_i_0 = 1'b0;
 
@@ -211,7 +211,7 @@ module tb_top_mbist;
 
             wait(done_o_0 == 1'b1);
 
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
         end
 
@@ -276,7 +276,7 @@ module tb_top_mbist;
         repaired_physical_addr = 0;
 
 
-        rst_i_0          = 1'b1;
+        rst_i          = 1'b1;
         start_i_0        = 1'b0;
         fault_en_i_0     = 1'b0;
         repair_reset_i_0 = 1'b1;
@@ -327,7 +327,7 @@ module tb_top_mbist;
         $display("");
         $display("INPUTS");
         $display("--------------------------------------------");
-        $display("RST          = %b", rst_i_0);
+        $display("RST          = %b", rst_i);
         $display("START        = %b", start_i_0);
         $display("FAULT_EN     = %b", fault_en_i_0);
         $display("REPAIR_RESET = %b", repair_reset_i_0);
@@ -446,7 +446,7 @@ module tb_top_mbist;
 
         // Wait for repair controller output
         repeat(2)
-            @(posedge clk_i_0);
+            @(posedge clk_i);
 
 
         $display("");
