@@ -32,13 +32,37 @@ module control_logic #(
     // =========================================================
     // STATES
     // =========================================================
+    //
+    // WRITE and READ_WAIT are now each split into a SETTLE
+    // half (address held, no strobes) and a COMMIT half
+    // (address still held, the actual we_o/compare_en_o
+    // strobe fires, THEN addr_en_o advances for the *next*
+    // address).
+    //
+    // This exists because repair_controller's repair-table
+    // lookup is now a registered (1-cycle) read instead of a
+    // combinational one (see repair_controller.v). Every
+    // address needs one full settled cycle presented to
+    // repair_controller before address_remapper's mux is
+    // allowed to consume lookup_valid_o/lookup_phys_addr_o --
+    // otherwise the mux pairs THIS cycle's logical address
+    // with the PREVIOUS cycle's repair status, which is wrong
+    // whenever the address changes every cycle (as WRITE did,
+    // and as READ's old addr_en_o-in-READ_WAIT placement did).
+    //
+    // addr_en_o is deliberately placed in the COMMIT state,
+    // AFTER the strobe, so the address that we_o/compare_en_o
+    // actually acts on is never the one that just got
+    // incremented.
+    // =========================================================
 
     parameter IDLE         = 3'b000;
     parameter INIT         = 3'b001;
-    parameter WRITE        = 3'b010;
+    parameter WRITE        = 3'b010; // settle: hold address, let repair lookup catch up
+    parameter WRITE_COMMIT = 3'b111; // commit: we_o on the held address, then advance
     parameter READ_SETUP   = 3'b011;
-    parameter READ_WAIT    = 3'b100;
-    parameter READ_COMPARE = 3'b101;
+    parameter READ_WAIT    = 3'b100; // settle: hold address, let repair lookup catch up
+    parameter READ_COMPARE = 3'b101; // commit: compare_en_o on the held address, then advance
     parameter DONE         = 3'b110;
 
     reg [2:0] state;
@@ -92,10 +116,21 @@ module control_logic #(
 
 
             // -------------------------------------------------
-            // March write
+            // March write -- settle (repair lookup catches up
+            // to the address that WRITE_COMMIT is about to
+            // write with)
             // -------------------------------------------------
 
-            WRITE: begin
+            WRITE:
+                next_state = WRITE_COMMIT;
+
+
+            // -------------------------------------------------
+            // March write -- commit (actual we_o strobe, then
+            // advance to the next address)
+            // -------------------------------------------------
+
+            WRITE_COMMIT: begin
 
                 if (addr_done_i)
                     next_state = READ_SETUP;
@@ -114,7 +149,8 @@ module control_logic #(
 
 
             // -------------------------------------------------
-            // BRAM read latency
+            // Read -- settle (repair lookup catches up; also
+            // covers the BRAM's own registered-read latency)
             // -------------------------------------------------
 
             READ_WAIT:
@@ -122,7 +158,8 @@ module control_logic #(
 
 
             // -------------------------------------------------
-            // Compare read data
+            // Read -- commit (actual compare_en_o strobe, then
+            // advance to the next address)
             // -------------------------------------------------
 
             READ_COMPARE: begin
@@ -195,17 +232,31 @@ module control_logic #(
 
 
             // -------------------------------------------------
-            // WRITE
+            // WRITE -- settle: address held, nothing strobes.
+            // (defaults above already do this -- no case entry
+            // needed, listed for clarity)
             // -------------------------------------------------
 
             WRITE: begin
 
-                addr_en_o = 1'b1;
+                pattern_sel_o = 2'b00;
+                addr_dir_o    = 1'b1;
+
+            end
+
+
+            // -------------------------------------------------
+            // WRITE_COMMIT -- write the held address, then
+            // advance for the next one.
+            // -------------------------------------------------
+
+            WRITE_COMMIT: begin
+
                 we_o      = 1'b1;
+                addr_en_o = 1'b1;
 
                 pattern_sel_o = 2'b00;
-
-                addr_dir_o = 1'b1;
+                addr_dir_o    = 1'b1;
 
             end
 
@@ -222,31 +273,29 @@ module control_logic #(
 
 
             // -------------------------------------------------
-            // READ
+            // READ -- settle: address held, nothing strobes.
             // -------------------------------------------------
 
             READ_WAIT: begin
 
-                addr_en_o = 1'b1;
-
                 pattern_sel_o = 2'b00;
-
-                addr_dir_o = 1'b1;
+                addr_dir_o    = 1'b1;
 
             end
 
 
             // -------------------------------------------------
-            // COMPARE
+            // READ_COMPARE -- compare the held address, then
+            // advance for the next one.
             // -------------------------------------------------
 
             READ_COMPARE: begin
 
                 compare_en_o = 1'b1;
+                addr_en_o    = 1'b1;
 
                 pattern_sel_o = 2'b00;
-
-                addr_dir_o = 1'b1;
+                addr_dir_o    = 1'b1;
 
             end
 

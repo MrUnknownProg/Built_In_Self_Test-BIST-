@@ -239,21 +239,45 @@ module repair_controller #(
     // The address remapper uses lookup_valid_o to decide.
     // =========================================================
 
-    always @(*) begin
+    // ---------------------------------------------------------
+    // PIPELINE STAGE: registered lookup
+    //
+    // This used to be a combinational (always @(*)) read of
+    // the repair table, which let the repair_table_reg[][]
+    // bits fan out, unregistered, straight through
+    // address_remapper -> fault_inject -> comparator.
+    // That single combinational cone was the -0.629 ns
+    // violation (13 logic levels / fanout 32 / 10.27 ns delay
+    // against a 10.0 ns clock).
+    //
+    // Registering the lookup here turns it into its own
+    // pipeline stage: the 256-entry mux settles within
+    // repair_controller's own clock-to-out budget instead of
+    // bleeding into every downstream module.
+    //
+    // lookup_valid_o / lookup_phys_addr_o are now valid ONE
+    // cycle after lookup_addr_i is presented. See
+    // control_logic.v's new REPAIR_LOOKUP state, which gives
+    // this stage a settled cycle before READ_WAIT/READ_COMPARE
+    // sample it -- the same pattern already used there for the
+    // BRAM's own registered-read latency.
+    // ---------------------------------------------------------
+
+    always @(posedge clk_i) begin
 
         if (lookup_addr_i < TABLE_DEPTH) begin
 
-            lookup_valid_o =
+            lookup_valid_o <=
                 repair_valid[lookup_addr_i];
 
-            lookup_phys_addr_o =
+            lookup_phys_addr_o <=
                 repair_table[lookup_addr_i];
 
         end
         else begin
 
-            lookup_valid_o     = 1'b0;
-            lookup_phys_addr_o = lookup_addr_i;
+            lookup_valid_o     <= 1'b0;
+            lookup_phys_addr_o <= lookup_addr_i;
 
         end
 
